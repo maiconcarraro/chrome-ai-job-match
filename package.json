@@ -1,5 +1,6 @@
 {
   "name": "chrome-ai-job-match",
+  "homepage": "http://maiconcarraro.github.io/chrome-ai-job-match",
   "private": true,
   "version": "0.0.0",
   "type": "module",

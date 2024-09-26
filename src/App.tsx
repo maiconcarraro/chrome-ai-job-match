@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Label } from "./components/ui/label";
 import { Input } from "./components/ui/input";
 import DetectAI from "./components/detectAI";
@@ -8,7 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import XMLToJSON from "xml-js";
 import { JobFeed } from "./interfaces/rss";
 import useAI from "./hooks/useAI";
-import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
+import JobResults from "./components/JobResults";
 
 let indexToggle = 1;
 const toggleOptions = [
@@ -18,7 +18,7 @@ const toggleOptions = [
 ];
 
 function App() {
-  const [session, refreshSession] = useAI();
+  const [session] = useAI();
 
   const [prompt, setPrompt] = useState(
     "I'm looking for a job related to Software Engineer"
@@ -88,6 +88,7 @@ function App() {
   return (
     <section className="container max-w-xl py-12 space-y-6">
       <DetectAI />
+
       <div>
         <Label htmlFor="prompt">What are you looking for:</Label>
         <Textarea
@@ -142,32 +143,7 @@ function App() {
         </Button>
       </div>
 
-      {isGenerating ? (
-        <div className="text-center">Generating...</div>
-      ) : filteredTitles.length ? (
-        <div>
-          <p>{filteredTitles.length} job(s) that may be relevant to you...</p>
-
-          {filteredTitles.map((item) => (
-            <Card key={item.link._cdata}>
-              <CardHeader>
-                <CardTitle>{item.title._cdata}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Button asChild>
-                  <a href={item.link._cdata}>Open Job page</a>
-                </Button>
-
-                <p className="flex flex-wrap line-clamp-1">
-                  Source: {item.link._cdata.split("?").shift()}
-                </p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <p>No relevant jobs.</p>
-      )}
+      <JobResults jobs={filteredTitles} loading={isGenerating} />
     </section>
   );
 }
