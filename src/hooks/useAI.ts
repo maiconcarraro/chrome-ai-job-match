@@ -7,6 +7,7 @@ interface SessionAI {
   tokensSoFar: number;
   topK: number;
   prompt: (s: string) => Promise<string>;
+  destroy: () => void;
 }
 
 declare global {
@@ -31,9 +32,14 @@ export default function useAI() {
     setSession(session);
   }, []);
 
+  const refreshSession = useCallback(() => {
+    session?.destroy();
+    createSession();
+  }, [session, createSession]);
+
   useEffect(() => {
     createSession();
   }, [createSession]);
 
-  return [session] as const;
+  return [session, refreshSession] as const;
 }

@@ -8,24 +8,28 @@ import { useQuery } from "@tanstack/react-query";
 import XMLToJSON from "xml-js";
 import { JobFeed } from "./interfaces/rss";
 import useAI from "./hooks/useAI";
+import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 
-const recruitics = "https://careers.recruitics.com/feeds/jobs-rss";
-const thesteppingstonesgroup =
-  "https://jobs.thesteppingstonesgroup.com/feeds/jobs-rss";
+let indexToggle = 1;
+const toggleOptions = [
+  "https://careers.recruitics.com",
+  "https://jobs.thesteppingstonesgroup.com",
+  "https://www.savatreecareers.com",
+];
 
 function App() {
-  const [session] = useAI();
+  const [session, refreshSession] = useAI();
 
   const [prompt, setPrompt] = useState(
     "I'm looking for a job related to Software Engineer"
   );
   const [selectedPrompt, setSelectedPrompt] = useState("");
-  const [sourceFeed, setSourceFeed] = useState(recruitics);
+  const [sourceFeed, setSourceFeed] = useState(toggleOptions[0]);
 
   const { data: jobs, isFetching: isFetchingJobs } = useQuery<JobFeed>({
     queryKey: ["sourceFeed", sourceFeed],
     queryFn: () =>
-      fetch(sourceFeed)
+      fetch(`${sourceFeed}/feeds/jobs-rss`)
         .then((res) => res.text())
         .then((data) => {
           const jsonString = XMLToJSON.xml2json(data, {
@@ -38,15 +42,21 @@ function App() {
   });
 
   const { data: result, isFetching: isGenerating } = useQuery<string>({
-    queryKey: ["applyPrompt", selectedPrompt],
+    queryKey: ["applyPrompt", selectedPrompt, sourceFeed],
     queryFn: () => {
-      const finalPrompt = `${prompt}, from the following list which are the best choices for me:\n${validTitles.join(
-        "\n"
-      )}`;
+      const finalPrompt = `Imagine you are a recruiter and a person is asking you "${prompt}", from the following list which are the only relevant titles for them:\n${validTitles
+        .map((s) => `- ${s}`)
+        .join("\n")}`;
 
       console.log("prompt", finalPrompt);
 
-      return session!.prompt(finalPrompt);
+      return session!.prompt(finalPrompt).then((result) => {
+        console.info(result);
+
+        // refreshSession();
+
+        return result;
+      });
     },
     staleTime: Infinity,
     enabled: !!selectedPrompt && !!session,
@@ -57,8 +67,23 @@ function App() {
       return [];
     }
 
-    return jobs.rss.channel.item.map((i) => i.title._cdata);
+    return [...new Set(jobs.rss.channel.item.map((i) => i.title._cdata))];
   }, [jobs]);
+
+  const filteredTitles = useMemo(() => {
+    if (!result || !jobs) {
+      return [];
+    }
+
+    const relevantTokens = result
+      .split("\n")
+      .filter((s) => s.startsWith("-"))
+      .map((s) => s.replace("- ", "").split("**").filter(Boolean).join());
+
+    return jobs.rss.channel.item.filter((i) =>
+      relevantTokens.includes(i.title._cdata)
+    );
+  }, [result, jobs]);
 
   return (
     <section className="container max-w-xl py-12 space-y-6">
@@ -79,11 +104,12 @@ function App() {
           <Input disabled value={sourceFeed} />
           <Button
             variant="secondary"
-            onClick={() =>
-              setSourceFeed((prev) =>
-                prev === recruitics ? thesteppingstonesgroup : recruitics
-              )
-            }
+            onClick={() => {
+              setSourceFeed(
+                toggleOptions[indexToggle++ % toggleOptions.length]
+              );
+              setSelectedPrompt("");
+            }}
           >
             Toggle source
           </Button>
@@ -91,9 +117,9 @@ function App() {
       </div>
 
       {isFetchingJobs ? (
-        <div>Loading jobs...</div>
+        <div className="text-center">Loading jobs...</div>
       ) : (
-        <div>Found {validTitles.length} jobs</div>
+        <div>Found {jobs?.rss.channel.item.length} jobs</div>
       )}
 
       <div className="prose">
@@ -108,16 +134,39 @@ function App() {
         <Button
           className="w-full"
           disabled={prompt === selectedPrompt}
-          onClick={() => setSelectedPrompt(prompt)}
+          onClick={() => {
+            setSelectedPrompt(prompt);
+          }}
         >
           Recommend me a job
         </Button>
       </div>
 
       {isGenerating ? (
-        <div>Generating...</div>
+        <div className="text-center">Generating...</div>
+      ) : filteredTitles.length ? (
+        <div>
+          <p>{filteredTitles.length} job(s) that may be relevant to you...</p>
+
+          {filteredTitles.map((item) => (
+            <Card key={item.link._cdata}>
+              <CardHeader>
+                <CardTitle>{item.title._cdata}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button asChild>
+                  <a href={item.link._cdata}>Open Job page</a>
+                </Button>
+
+                <p className="flex flex-wrap line-clamp-1">
+                  Source: {item.link._cdata.split("?").shift()}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       ) : (
-        <div dangerouslySetInnerHTML={{ __html: result! }} />
+        <p>No relevant jobs.</p>
       )}
     </section>
   );
